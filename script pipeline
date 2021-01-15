@@ -26,7 +26,7 @@ node {
     
     stage('Build') {
         def poma = "./gateway-service/pom.xml"
-        rtMaven.deployer releaseRepo: 'maven-release-local-devops', snapshotRepo: 'maven-snapshots-virtual', server: artiServer
+        rtMaven.deployer releaseRepo: 'maven-release-local-devops', snapshotRepo: 'maven-snapshots-local-devops', server: artiServer
         rtMaven.resolver releaseRepo: 'maven-releases-virtual', snapshotRepo: 'maven-snapshots-virtual', server: artiServer
         rtMaven.deployer.deployArtifacts = false
         rtMaven.tool = 'maven' // Tool name from Jenkins configuration
