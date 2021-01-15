@@ -1,0 +1,151 @@
+
+pipeline {
+    agent any
+    environment{
+        sonarCode='d0d2349dfae0aaa5a87beaaf2df10dd796e2ffa7'
+    }
+    stages {
+        
+        stage ('setenv') {
+            steps {
+                script{
+                    proplist=['c=c']
+                }
+            }
+        }
+        
+        
+        stage ('Clone') {
+            steps {
+                git branch: 'master', url:  'https://github.com/liwei2151284/Guestbook-microservices-k8s.git'
+            }
+        }
+        
+        stage ('proplist'){
+            steps {
+                script{
+                    proplist.add('a=a')
+                    proplist.add('b=b')
+                }
+            }
+        }
+
+
+        stage ('Artifactory configuration') {
+            steps {
+                rtBuildInfo (
+                    captureEnv: true
+                )
+                rtMavenDeployer (
+                    id: 'deploy_arti',
+                    serverId: 'arti-platform',
+                    releaseRepo: "maven-pipeline-dev-local",
+                    snapshotRepo: "maven-pipeline-dev-local",
+                    properties: proplist
+                )
+
+                rtMavenResolver (
+                    id: "resolve_arti",
+                    serverId: 'arti-platform',
+                    releaseRepo: "libs-release",
+                    snapshotRepo: "libs-release"
+                )
+            }
+        }
+        
+        stage ('testsonar'){
+            steps {
+                script{
+                    
+                }
+            }
+        }
+
+        stage ('Exec Maven') {
+            steps {
+                rtMavenRun (
+                    tool: 'maven', // Tool name from Jenkins configuration
+                    pom: './discovery-service/pom.xml',
+                    goals: 'clean install',
+                    deployerId: "deploy_arti",
+                    resolverId: "resolve_arti",
+                    buildName: "${JOB_NAME}_maven",
+                    buildNumber: "${BUILD_NUMBER}"
+                )
+              
+            }
+        }
+
+        stage ('Publish mavenbuild info') {
+            steps {
+                rtPublishBuildInfo (
+                    serverId: 'arti-platform',
+                    buildName: "${JOB_NAME}_maven",
+                    buildNumber: "${BUILD_NUMBER}"
+                )
+                xrayScan (
+                    serverId: 'arti-platform',
+                    buildName: "${JOB_NAME}_maven",
+                    buildNumber: "${BUILD_NUMBER}",
+                    failBuild: false
+                )
+            }
+        }
+        
+        stage ('Publish tarbuild info') {
+            steps {
+                rtPublishBuildInfo (
+                    serverId: 'arti-platform',
+                    buildName: "${JOB_NAME}_tar",
+                    buildNumber: "${BUILD_NUMBER}"
+                )
+                xrayScan (
+                    serverId: 'arti-platform',
+                    buildName: "${JOB_NAME}_tar",
+                    buildNumber: "${BUILD_NUMBER}",
+                    failBuild: false
+                )
+            }
+        }
+        
+        stage ('maven Promotion') {
+            steps {
+                rtPromote (
+                    //Mandatory parameter
+                    serverId: 'arti-platform',
+                    targetRepo: 'maven-pipeline-release-local',
+                    //Optional parameters
+                    buildName: "${JOB_NAME}_maven",
+                    buildNumber: "${BUILD_NUMBER}",
+                    comment: 'this is the promotion comment',
+                    sourceRepo: 'maven-pipeline-dev-local',
+                    status: 'Released',
+                    includeDependencies: true,
+                    failFast: true,
+                    copy: true
+                )
+            }
+        }
+        
+        stage ('tar Promotion') {
+            steps {
+                rtPromote (
+                    //Mandatory parameter
+                    serverId: 'arti-platform',
+                    targetRepo: 'config-local-prod',
+                    //Optional parameters
+                    buildName: "${JOB_NAME}_tar",
+                    buildNumber: "${BUILD_NUMBER}",
+                    comment: 'this is the promotion comment',
+                    sourceRepo: 'config-local',
+                    status: 'Released',
+                    includeDependencies: true,
+                    failFast: true,
+                    copy: true
+                )
+            }
+        }
+        
+    }
+}
+
