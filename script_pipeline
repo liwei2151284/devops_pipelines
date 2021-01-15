@@ -1,0 +1,61 @@
+node {
+    
+    def artiServer = Artifactory.server 'artifactory'
+    def rtMaven = Artifactory.newMavenBuild()
+    def buildInfo = Artifactory.newBuildInfo()
+    def descriptor = Artifactory.mavenDescriptor()
+    buildInfo.env.capture = true
+
+    stage('Preparation') { 
+
+        git credentialsId: 'root', url: 'http://192.168.0.211/root/guestbook_devops.git'
+
+    }
+    
+    stage('sonarqube'){
+        //
+    }
+    
+    stage('collect sonarqube'){
+        //
+    }
+    
+    stage('repo re') {
+        
+    }
+    
+    stage('Build') {
+        def poma = "./gateway-service/pom.xml"
+        rtMaven.deployer releaseRepo: 'maven-release-local-devops', snapshotRepo: 'maven-snapshots-local-devops', server: artiServer
+        rtMaven.resolver releaseRepo: 'maven-releases-virtual', snapshotRepo: 'maven-snapshots-virtual', server: artiServer
+        rtMaven.deployer.deployArtifacts = false
+        rtMaven.tool = 'maven' // Tool name from Jenkins configuration
+        rtMaven.run pom: "${poma}".toString(), goals: 'clean install', buildInfo: buildInfo
+        artiServer.publishBuildInfo buildInfo
+    }
+    
+    stage('deploy') {
+        buildInfo.env.capture = true
+        rtMaven.deployer.deployArtifacts buildInfo
+    }
+    
+    stage('jira issue') {
+
+    }
+    
+    stage('scan') {
+
+    }
+    
+    stage('promoto'){
+        
+    }
+    
+    stage('build docker'){
+        
+    }
+    
+    stage('prod'){
+        
+    }
+}
