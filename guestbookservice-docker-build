@@ -1,0 +1,63 @@
+
+node {
+    def mvnHome
+    def artiServer = Artifactory.server 'artifactory_cloud'
+    def rtDocker = Artifactory.docker server: artiServer
+    def buildInfo = Artifactory.newBuildInfo()
+    buildInfo.env.capture = true
+     
+    stage('Preparation') { // for display purposes
+      // Get some code from a GitHub repository
+        git 'https://github.com/liwei2151284/guestbook-microservices-k8s.git'
+        mvnHome = tool 'maven'
+   }
+    stage('Maven Build') {
+        dir ('guestbook-service') {
+            sh 'mvn package -Dmaven.test.skip=true'
+        }
+   }
+   
+    stage('Guestbook service Docker Build') {
+        
+        dir ('guestbook-service') {
+            tagDockerApp = "liwei2151284.jfrog.io/docker-local/guestbook-microservices-k8s/guestbook-service:${BUILD_NUMBER}"
+            docker.build(tagDockerApp,"-f Dockerfile .")
+            buildInfo = rtDocker.push(tagDockerApp, "docker-local", buildInfo)
+            artiServer.publishBuildInfo buildInfo
+        }
+    }
+      
+    stage('set integration version'){
+        
+        def discovery_version = 8
+
+
+        def replicaCount = 2
+        dir('kube-deploy/charts/guestbook'){
+            sh "sed -i 's/podCount/${replicaCount}/g' values.yaml"
+            sh "sed -i 's/chartversion/${BUILD_NUMBER}/g' Chart.yaml"
+            sh "sed -i 's/guestbook_version/${BUILD_NUMBER}/g' values.yaml"
+            sh "sed -i 's/discovery_version/${discovery_version}/g' values.yaml"
+        }
+    }
+    
+    stage('helm package'){
+        dir('kube-deploy/charts'){
+            sh 'helm package guestbook'
+        }
+    }
+    
+    stage('helm package upload'){
+        dir('kube-deploy/charts'){
+            withCredentials([usernamePassword(credentialsId: 'jfrog_cloud', passwordVariable: 'pwd', usernameVariable: 'user')]) {
+                sh "curl -u ${user}:${pwd} -T guestbook-0.1.${BUILD_NUMBER}.tgz 'https://liwei2151284.jfrog.io/artifactory/helm-local/guestbook/guestbook-0.1.${BUILD_NUMBER}.tgz'"
+            }
+        }
+    }
+    
+    stage('helm install'){
+        sh 'helm repo update'
+        sh 'helm upgrade --install guestbook helm-virtual/guestbook --namespace=default'
+    }
+
+}
