@@ -1,0 +1,40 @@
+podTemplate(label: 'jenkins-slave', cloud: 'k8s',containers: [
+      containerTemplate(name: 'jenkins-slave', envVars: [envVar(key: 'JAVA_HOME', value: "/usr/lib/jvm/java-8-openjdk-amd64")],image: "akagelo/jenkins-slave-maven3:latest",  command: 'cat'),
+    ]) {
+      node('jenkins-slave') {
+          stage('git-checkout') {
+                container('jenkins-slave') {
+                    echo 'a'
+                    git 'https://github.com/liwei2151284/Guestbook-microservices-k8s.git'
+              }
+          }
+
+        stage('artifactory-env-set') {
+              container('jenkins-slave') {
+                artiServer = Artifactory.server 'artifactory_cloud'
+                rtMaven = Artifactory.newMavenBuild()
+                buildInfo = Artifactory.newBuildInfo()
+              }
+          }
+
+        stage('artifactory config') {
+              container('jenkins-slave') {
+                rtMaven.deployer releaseRepo: 'maven-stage-local-devops', snapshotRepo: 'maven-snapshots-local', server: artiServer
+                rtMaven.resolver releaseRepo: 'maven-releases-virtual', snapshotRepo: 'maven-snapshots-virtual', server: artiServer
+                rtMaven.deployer.deployArtifacts = false
+              }
+          }
+          
+        stage('artifactory build') {
+              container('jenkins-slave') {
+                    def poma = "./gateway-service/pom.xml"
+                    //env.JAVA_HOME = "${java_home}"
+                    rtMaven.tool = 'maven' // Tool name from Jenkins configuration
+                    rtMaven.run pom: "${poma}".toString(), goals: 'clean install', buildInfo: buildInfo
+                    artiServer.publishBuildInfo buildInfo
+              }
+          }
+        
+
+      }
+  }
