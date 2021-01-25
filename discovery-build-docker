@@ -1,0 +1,25 @@
+node {
+   def mvnHome
+   stage('Preparation') { // for display purposes
+      // Get some code from a GitHub repository
+      git 'https://github.com/alexwang66/Guestbook-microservices-k8s.git'
+      mvnHome = tool 'maven'
+   }
+   stage('Maven Build') {
+      sh 'mvn package'
+   }
+
+    stage('Discovery service Docker Build') {
+        withCredentials([usernamePassword(credentialsId: 'jfrog_cloud', passwordVariable: 'jfrogpwd', usernameVariable: 'jfroguser')]) {
+    
+              sh '''
+              cd discovery-service
+              docker login liwei2151284.jfrog.io -u"${jfroguser}" -p"${jfrogpwd}"
+              docker build -t liwei2151284.jfrog.io/docker-local/guestbook-microservices-k8s/discovery-service:"${BUILD_NUMBER}" .
+              sleep 2
+              docker push liwei2151284.jfrog.io/docker-local/guestbook-microservices-k8s/discovery-service:"${BUILD_NUMBER}"
+              '''
+       }
+    }
+
+}
